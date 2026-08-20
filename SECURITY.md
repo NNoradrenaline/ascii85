@@ -1,21 +1,23 @@
-# Security Policy
+# Security policy
 
 ## Supported version
 
-The actively maintained line is the current `master` branch and the latest tagged release.
+Security fixes are applied to the current `master` branch and the newest tagged release.
 
 ## Reporting a vulnerability
 
-Please use GitHub private vulnerability reporting / a private security advisory for this repository when available. Avoid opening a public issue for a vulnerability that could put users at risk before a fix is ready.
+Please do **not** publish exploitable details in a public issue before a fix is available.
 
-Useful reports include:
+Use GitHub's private vulnerability reporting feature for this repository when available. Include:
 
-- the affected commit or release,
-- operating system and compiler,
-- a minimal reproducer,
-- expected vs. actual behavior,
-- sanitizer output or crash logs if available.
+- the affected version or commit,
+- a minimal reproducer or malformed input,
+- expected versus observed behavior,
+- compiler/OS details,
+- sanitizer output or crash trace when relevant.
 
-## Security notes
+For parser bugs, please mention whether the issue affects classic Ascii85, A85X1, or both.
 
-A85X is an encoding format. It does not provide confidentiality or cryptographic authentication. Its CRC-32 field detects accidental corruption, not malicious tampering.
+## Security boundaries
+
+A85X1 CRC-32 is accidental-corruption detection only. It does not provide cryptographic integrity, authentication, or secrecy. An attacker who can alter an A85X1 payload can also recompute its CRC.

@@ -1,6 +1,6 @@
-.TH ASCII85 1 "August 2026" "ascii85 2.1.0-a85x" "User Commands"
+.TH ASCII85 1 "August 2026" "ascii85 2.2.0-a85x" "User Commands"
 .SH NAME
-ascii85 \- encode or decode Ascii85 and A85X1 data
+ascii85 \- encode and decode Ascii85 or A85X1 data
 .SH SYNOPSIS
 .B ascii85
 .RI [ OPTION ]...
@@ -9,52 +9,66 @@ ascii85 \- encode or decode Ascii85 and A85X1 data
 .B ascii85
 encodes FILE, or standard input, as classic Ascii85 by default.
 Use
-.B \-d
-to decode.
-Use
-.B \-x
-or
-.B \-\-a85x
-for the canonical A85X1 envelope.
+.B --decode
+to decode and
+.B --a85x
+to select the canonical A85X1 format.
 .SH OPTIONS
 .TP
-.BR \-d ", " \-\-decode
+.BR -d , " --decode"
 Decode instead of encode.
 .TP
-.BR \-x ", " \-\-a85x
-Use A85X1 mode.
+.BR -x , " --a85x"
+Use A85X1 instead of classic Ascii85.
 .TP
-.BR \-i ", " \-\-ignore\-garbage
+.BR -i , " --ignore-garbage"
 Ascii85 decode only: skip invalid non-whitespace characters.
 .TP
-.BR \-n ", " \-\-no\-delims
-Ascii85 only: omit delimiters when encoding, or do not require them when decoding.
+.BR -n , " --no-delims"
+Ascii85 only: omit delimiters while encoding, or do not require them while decoding.
 .TP
-.BR \-w ", " \-\-wrap =COLS
-Ascii85 encode only: wrap encoded output after COLS characters. Use 0 to disable.
+.BR -w , " --wrap=" COLS
+Ascii85 encode only: wrap encoded output after COLS characters. Use 0 to disable wrapping.
 .TP
-.BR \-y ", " \-\-y\-abbr
+.BR -y , " --y-abbr"
 Ascii85 only: abbreviate four spaces as y.
 .TP
-.B \-\-version
-Print version information.
+.B --version
+Print version information and exit.
 .TP
-.BR \-h ", " \-\-help
-Print help.
+.BR -h , " --help"
+Print help and exit.
 .SH A85X1
-A85X1 uses the envelope:
+A85X1 uses the canonical envelope
 .PP
-.B A85X1:<payload>:<pad>:<CRC32>
+.nf
+A85X1:<payload>:<pad>:<CRC32>
+.fi
 .PP
-The decoder is strict. It rejects trailing bytes, embedded invalid characters,
-non-canonical checksum formatting, invalid padding, out-of-range radix-85
-groups, and CRC mismatches. Decoded bytes are held in a temporary stream until
-the checksum succeeds, so unverified output is not released to stdout.
+The CRC-32 detects accidental corruption only. It is not cryptographic authentication.
+A85X1 decoding is strict and rejects trailing bytes, whitespace, malformed padding, out-of-range Base85 groups, and checksum mismatches.
+Decoded output is not released to standard output until checksum verification succeeds.
+.SH EXAMPLES
+Encode classic Ascii85:
 .PP
-CRC-32 is for accidental corruption detection only and is not authentication.
+.nf
+printf 'hello world' | ascii85
+.fi
+.PP
+Encode A85X1:
+.PP
+.nf
+printf 'hello world' | ascii85 --a85x
+.fi
+.PP
+Decode A85X1:
+.PP
+.nf
+printf 'A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185' | ascii85 -dx
+.fi
 .SH EXIT STATUS
-Zero on success, non-zero on invalid input, I/O errors, or invalid options.
-.SH SEE ALSO
-.BR base64 (1)
+Returns zero on success and nonzero for malformed input, invalid options, I/O failures, or A85X checksum failure.
+.SH SECURITY
+A85X1 CRC-32 is not a MAC or signature. Do not use it to authenticate hostile data.
 .SH LICENSE
-MIT.
+MIT License. Original program by Remy Oukaour; fork enhancements by A85X contributors.

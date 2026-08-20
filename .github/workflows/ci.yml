@@ -2,13 +2,16 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-test:
+  cmake-platforms:
+    name: CMake / ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -19,12 +22,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build -C Release --output-on-failure
+
+  unix-compilers:
+    name: ${{ matrix.os }} / ${{ matrix.cc }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+          - os: ubuntu-latest
+            cc: clang
+          - os: macos-latest
+            cc: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: make clean test
 
   sanitizers:
     runs-on: ubuntu-latest
@@ -33,9 +55,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: ASan + UBSan
-        env:
-          CC: clang
-        run: make sanitize
-      - name: Fuzz smoke
-        run: make clean all fuzz-smoke
+      - run: make sanitize CC=clang
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: libFuzzer + ASan/UBSan
+        run: make fuzz-smoke FUZZ_CC=clang
+      - name: Process-level mutation smoke
+        run: make clean all fuzz-process
+
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build with MSVC directly
+        shell: cmd
+        run: cl /nologo /std:c11 /W4 /O2 ascii85.c /Fe:ascii85.exe
+      - name: Run tests
+        shell: pwsh
+        run: python tests.py .\ascii85.exe

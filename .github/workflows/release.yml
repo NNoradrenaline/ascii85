@@ -25,25 +25,30 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release
-      - name: Stage Unix binary
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage Unix archive
         if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p dist
           cp build/${{ matrix.exe }} dist/
-          cp README.md LICENSE SPEC-A85X.md CHANGELOG.md dist/
+          cp README.md LICENSE SPEC-A85X.md CHANGELOG.md SECURITY.md ascii85.1 dist/
           cmake -E tar czf ascii85-${{ matrix.name }}.tar.gz dist
-      - name: Stage Windows binary
+      - name: Stage Windows archive
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item build/Release/${{ matrix.exe }} dist/
-          Copy-Item README.md,LICENSE,SPEC-A85X.md,CHANGELOG.md dist/
+          Copy-Item README.md,LICENSE,SPEC-A85X.md,CHANGELOG.md,SECURITY.md dist/
           Compress-Archive -Path dist/* -DestinationPath ascii85-${{ matrix.name }}.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -60,6 +65,8 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: Create SHA-256 checksums
+        run: cd artifacts && sha256sum ascii85-* > SHA256SUMS.txt
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
