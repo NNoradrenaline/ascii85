@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.3.0-a85x - 2026-08-20
+
+### Usability
+
+- Added `-t` / `--text` for encoding short command-line strings without piping or creating an input file.
+- Added `-o` / `--output` for writing encoded or decoded output directly to a file.
+- Output-file writes are staged in a temporary stream and only committed after the codec operation succeeds, so a malformed A85X input does not overwrite an existing destination.
+- On Windows, launching `ascii85.exe` interactively with no arguments now shows help instead of immediately beginning a classic Ascii85 stream. Piped stdin remains unchanged; use `ascii85.exe -` to request interactive stdin explicitly.
+
+### Portability and regression coverage
+
+- Kept Windows stdin/stdout in explicit binary mode for raw byte preservation.
+- Expanded the regression suite with direct-text tests, staged-output tests, same-file transformations, and an explicit `00..FF` binary pipe round trip covering every possible byte value.
+- Routed codec output through explicit `FILE *` streams so stdout and staged file destinations share the same encoding/decoding paths.
+
 ## 2.2.0-a85x - 2026-08-20
 
 ### Security and correctness

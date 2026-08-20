@@ -6,7 +6,7 @@
         if (count == 5) {
             if (tuple > UINT32_MAX)
                 die("Ascii85 tuple exceeds 32-bit range");
-            ascii85_write_tuple((uint32_t)tuple, 4);
+            ascii85_write_tuple(out, (uint32_t)tuple, 4);
             tuple = 0;
             count = 0;
         }
@@ -26,7 +26,7 @@
         }
         if (tuple > UINT32_MAX)
             die("final Ascii85 tuple exceeds 32-bit range");
-        ascii85_write_tuple((uint32_t)tuple, original_count - 1);
+        ascii85_write_tuple(out, (uint32_t)tuple, original_count - 1);
     }
 }
 
@@ -89,17 +89,17 @@ static void a85x_encode_u32(uint32_t value, char out[5]) {
     }
 }
 
-static void a85x_encode(FILE *fp) {
+static void a85x_encode(FILE *fp, FILE *out) {
     unsigned char block[4] = {0, 0, 0, 0};
     size_t count = 0;
     uint32_t crc = crc32_start();
     int c;
 
-    if (fputs(A85X_VERSION ":", stdout) == EOF)
-        die("write error on standard output");
+    if (fputs(A85X_VERSION ":", out) == EOF)
+        die("output write error");
 
     while ((c = getc(fp)) != EOF) {
-        char out[5];
+        char encoded[5];
         uint32_t value;
         unsigned char b = (unsigned char)c;
         crc = crc32_update(crc, b);
@@ -109,9 +109,9 @@ static void a85x_encode(FILE *fp) {
                     ((uint32_t)block[1] << 16) |
                     ((uint32_t)block[2] << 8) |
                     (uint32_t)block[3];
-            a85x_encode_u32(value, out);
-            if (fwrite(out, 1, 5, stdout) != 5)
-                die("write error on standard output");
+            a85x_encode_u32(value, encoded);
+            if (fwrite(encoded, 1, 5, out) != 5)
+                die("output write error");
             count = 0;
             memset(block, 0, sizeof block);
         }

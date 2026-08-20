@@ -7,17 +7,15 @@ The original project is a compact C command-line Ascii85 encoder/decoder. This f
 ## Highlights
 
 - Classic Ascii85 remains the default, including `<~ ~>` delimiters, `z`, optional `y`, wrapping, delimiter-free mode, and garbage skipping.
-- Rejects impossible Base85 tuples above `UINT32_MAX`, one-character final tuples, and invalid abbreviation placement.
-- Fixes upstream operand parsing and adds portable option parsing without a `getopt.h` dependency.
-- Uses binary stdin/stdout mode on Windows so arbitrary decoded bytes are preserved exactly.
-- Adds `-x` / `--a85x` for canonical A85X1 envelopes.
-- A85X1 uses explicit padding, a fixed 85-character alphabet, versioned framing, and CRC-32 accidental-corruption detection.
-- A85X input is parsed incrementally instead of being loaded into a C string, so embedded NULs and trailing bytes are rejected correctly.
-- A85X decoding verifies CRC-32 before releasing decoded bytes to stdout.
-- Table-based CRC-32 and Base85 lookup reduce per-byte/per-character overhead.
-- Includes compatibility tests, malformed-input tests, deterministic fuzz-style mutations, large streaming tests, ASan/UBSan, and a libFuzzer target.
-- GitHub Actions tests Linux, macOS, and Windows and runs CodeQL security analysis.
-- Tagged releases can automatically build Linux, macOS, and Windows binaries.
+- Adds `-x` / `--a85x` for canonical A85X1 envelopes with explicit padding and CRC-32 accidental-corruption detection.
+- A85X decoding verifies CRC-32 before releasing decoded bytes.
+- Adds `-t` / `--text` for encoding short text directly from the command line.
+- Adds `-o` / `--output` for writing results directly to a file.
+- Output-file writes are staged and committed only after the operation succeeds, so a failed A85X decode does not overwrite an existing destination.
+- Uses binary stdin/stdout mode on Windows so arbitrary byte values are preserved exactly.
+- Rejects impossible Base85 tuples above `UINT32_MAX`, one-character final tuples, embedded NULs in A85X envelopes, trailing A85X bytes, and other malformed forms.
+- Includes compatibility tests, malformed-input tests, deterministic mutations, all-byte `00..FF` regressions, large streaming tests, ASan/UBSan, libFuzzer, CodeQL, and cross-platform CI.
+- Tagged releases automatically build Linux, macOS, and Windows binaries.
 
 ## Download and quick start
 
@@ -35,26 +33,48 @@ Extract the archive somewhere convenient. On Windows, open Command Prompt or Pow
 ascii85.exe --version
 ```
 
-You should see a version such as:
+Current version:
 
 ```text
-ascii85 2.2.0-a85x
+ascii85 2.3.0-a85x
 ```
+
+### Fastest way to encode text
+
+A85X:
+
+```bat
+ascii85.exe -x --text "hello world"
+```
+
+Short form:
+
+```bat
+ascii85.exe -x -t "hello world"
+```
+
+That immediately prints an `A85X1:...` token. Unlike `echo`, `--text` does not add a newline to the encoded input.
+
+`--text` encodes the command-line bytes supplied by the operating system/runtime. For arbitrary binary data or exact Unicode file bytes, use a file or stdin instead.
 
 ### Encode a file with A85X
 
-A85X is the hardened, opt-in format added by this fork.
-
-Windows:
+Using `-o` is the easiest form:
 
 ```bat
-ascii85.exe -x input.txt > output.a85x
+ascii85.exe -x input.txt -o output.a85x
 ```
 
 Linux/macOS:
 
 ```sh
-./ascii85 -x input.txt > output.a85x
+./ascii85 -x input.txt -o output.a85x
+```
+
+Shell redirection still works:
+
+```bat
+ascii85.exe -x input.txt > output.a85x
 ```
 
 The encoded file uses the canonical A85X1 envelope:
@@ -68,35 +88,57 @@ A85X1:<payload>:<pad>:<CRC32>
 Windows:
 
 ```bat
-ascii85.exe -x -d output.a85x > restored.txt
+ascii85.exe -x -d output.a85x -o restored.txt
 ```
 
 Linux/macOS:
 
 ```sh
-./ascii85 -x -d output.a85x > restored.txt
+./ascii85 -x -d output.a85x -o restored.txt
 ```
 
-The decoder verifies the CRC-32 before releasing decoded data. If the encoded data is damaged or altered, decoding fails instead of silently writing corrupted output.
+The decoder verifies the CRC-32 before releasing decoded data. When `-o` is used, output is staged first, so malformed A85X input does not replace an existing destination file.
 
 ### Binary files work too
 
-The tool is not limited to text. You can encode images, archives, executables, and other binary files.
-
-Windows example:
+The tool is not limited to text. Images, archives, executables, audio, encrypted blobs, and other binary data are handled byte-for-byte.
 
 ```bat
-ascii85.exe -x photo.png > photo.a85x
-ascii85.exe -x -d photo.a85x > restored-photo.png
+ascii85.exe -x photo.png -o photo.a85x
+ascii85.exe -x -d photo.a85x -o restored-photo.png
 ```
+
+On Windows, stdin and stdout are explicitly switched to binary mode. The regression suite includes a round trip containing every byte value from `0x00` through `0xFF`.
 
 ### Classic Ascii85 mode
 
 Leave off `-x` to use classic Ascii85:
 
 ```bat
-ascii85.exe input.txt > output.ascii85
-ascii85.exe -d output.ascii85 > restored.txt
+ascii85.exe input.txt -o output.ascii85
+ascii85.exe -d output.ascii85 -o restored.txt
+```
+
+Direct text also works in classic mode:
+
+```bat
+ascii85.exe -n -w0 --text "hello world"
+```
+
+### Windows double-click behavior
+
+On Windows, launching `ascii85.exe` interactively with no arguments now shows the help screen instead of immediately printing `<~` and waiting for input.
+
+Piped input is unchanged:
+
+```bat
+type input.bin | ascii85.exe -x
+```
+
+If you intentionally want interactive stdin, use `-` as the input operand:
+
+```bat
+ascii85.exe -x -
 ```
 
 For all options:
@@ -104,8 +146,6 @@ For all options:
 ```bat
 ascii85.exe --help
 ```
-
-If you prefer to compile it yourself, continue to the build instructions below.
 
 ## Build
 

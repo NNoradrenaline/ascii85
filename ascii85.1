@@ -1,4 +1,4 @@
-.TH ASCII85 1 "August 2026" "ascii85 2.2.0-a85x" "User Commands"
+.TH ASCII85 1 "August 2026" "ascii85 2.3.0-a85x" "User Commands"
 .SH NAME
 ascii85 \- encode and decode Ascii85 or A85X1 data
 .SH SYNOPSIS
@@ -13,6 +13,9 @@ Use
 to decode and
 .B --a85x
 to select the canonical A85X1 format.
+Use
+.B --text
+to encode a short command-line string directly.
 .SH OPTIONS
 .TP
 .BR -d , " --decode"
@@ -20,6 +23,12 @@ Decode instead of encode.
 .TP
 .BR -x , " --a85x"
 Use A85X1 instead of classic Ascii85.
+.TP
+.BR -t , " --text=" TEXT
+Encode TEXT instead of reading FILE or standard input. Encoding only.
+.TP
+.BR -o , " --output=" FILE
+Write output to FILE. Use - for standard output. File output is staged and committed after the codec operation succeeds.
 .TP
 .BR -i , " --ignore-garbage"
 Ascii85 decode only: skip invalid non-whitespace characters.
@@ -47,25 +56,34 @@ A85X1:<payload>:<pad>:<CRC32>
 .PP
 The CRC-32 detects accidental corruption only. It is not cryptographic authentication.
 A85X1 decoding is strict and rejects trailing bytes, whitespace, malformed padding, out-of-range Base85 groups, and checksum mismatches.
-Decoded output is not released to standard output until checksum verification succeeds.
+Decoded output is not released until checksum verification succeeds.
 .SH EXAMPLES
+Encode command-line text as A85X1:
+.PP
+.nf
+ascii85 -x --text 'hello world'
+.fi
+.PP
+Encode a file directly to an output file:
+.PP
+.nf
+ascii85 -x input.bin -o output.a85x
+.fi
+.PP
+Decode A85X1 to a file:
+.PP
+.nf
+ascii85 -dx output.a85x -o restored.bin
+.fi
+.PP
 Encode classic Ascii85:
 .PP
 .nf
 printf 'hello world' | ascii85
 .fi
-.PP
-Encode A85X1:
-.PP
-.nf
-printf 'hello world' | ascii85 --a85x
-.fi
-.PP
-Decode A85X1:
-.PP
-.nf
-printf 'A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185' | ascii85 -dx
-.fi
+.SH WINDOWS
+Windows stdin and stdout are placed in binary mode so byte values are not translated by the C runtime.
+When launched interactively with no arguments on Windows, ascii85 prints help instead of beginning an input stream. Piped stdin remains supported; use a FILE operand of - to request interactive stdin explicitly.
 .SH EXIT STATUS
 Returns zero on success and nonzero for malformed input, invalid options, I/O failures, or A85X checksum failure.
 .SH SECURITY
