@@ -1,43 +1,65 @@
 # `ascii85` A85X fork
 
-A modernized fork of [`roukaour/ascii85`](https://github.com/roukaour/ascii85), based on upstream commit `069f585cbe7642a3f0f08de71ced639ce48375ba`.
+A modernized, security-focused fork of [`roukaour/ascii85`](https://github.com/roukaour/ascii85), based on upstream commit `069f585cbe7642a3f0f08de71ced639ce48375ba`.
 
-Classic Ascii85 remains the default. The fork adds a strict, canonical **A85X1** mode plus parser hardening, portability work, CI, fuzzing hooks, installation support, and release automation.
+The original project is a compact C command-line Ascii85 encoder/decoder. This fork preserves classic Ascii85 as the default while adding stricter validation, cross-platform behavior, automated testing, fuzzing, and the optional canonical **A85X1** format.
 
 ## Highlights
 
-- Classic Ascii85 compatibility, including `<~ ~>`, `z`, optional `y`, wrapping, delimiter-free mode, and garbage skipping.
-- A85X1 via `-x` / `--a85x`.
-- Streaming A85X input parser with constant memory usage apart from the verified-output temporary file.
-- Strict rejection of trailing bytes and embedded NULs.
-- CRC-32 verification before any decoded A85X bytes are released to stdout.
-- Table-driven CRC-32 and A85X character decoding.
-- Impossible radix-85 values above `UINT32_MAX` are rejected.
-- Portable built-in option parser, removing the `getopt.h` dependency.
-- Windows stdin/stdout binary mode handling.
-- Make and CMake builds.
-- Linux, macOS, and Windows GitHub Actions CI.
-- ASan/UBSan testing.
-- AFL++ fuzz target and deterministic mutation smoke fuzzing.
-- `make install`, `make uninstall`, and a man page.
-- Tag-driven release workflow for downloadable binaries.
+- Classic Ascii85 remains the default, including `<~ ~>` delimiters, `z`, optional `y`, wrapping, delimiter-free mode, and garbage skipping.
+- Rejects impossible Base85 tuples above `UINT32_MAX`, one-character final tuples, and invalid abbreviation placement.
+- Fixes upstream operand parsing and adds portable option parsing without a `getopt.h` dependency.
+- Uses binary stdin/stdout mode on Windows so arbitrary decoded bytes are preserved exactly.
+- Adds `-x` / `--a85x` for canonical A85X1 envelopes.
+- A85X1 uses explicit padding, a fixed 85-character alphabet, versioned framing, and CRC-32 accidental-corruption detection.
+- A85X input is parsed incrementally instead of being loaded into a C string, so embedded NULs and trailing bytes are rejected correctly.
+- A85X decoding verifies CRC-32 before releasing decoded bytes to stdout.
+- Table-based CRC-32 and Base85 lookup reduce per-byte/per-character overhead.
+- Includes compatibility tests, malformed-input tests, deterministic fuzz-style mutations, large streaming tests, ASan/UBSan, and a libFuzzer target.
+- GitHub Actions tests Linux, macOS, and Windows and runs CodeQL security analysis.
+- Tagged releases can automatically build Linux, macOS, and Windows binaries.
 
 ## Build
 
-### Make
+### Unix-like systems
 
 ```sh
 make
+```
+
+### Windows with MSVC
+
+From a Visual Studio Developer Command Prompt:
+
+```bat
+cl /nologo /std:c11 /W4 /O2 ascii85.c /Fe:ascii85.exe
+```
+
+The source automatically switches stdin/stdout to binary mode on Windows.
+
+## Test
+
+```sh
 make test
+```
+
+AddressSanitizer + UndefinedBehaviorSanitizer:
+
+```sh
 make sanitize
 ```
 
-### CMake
+A short libFuzzer run:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
+make fuzz-smoke
+```
+
+For a longer fuzzing session:
+
+```sh
+make fuzz
+./fuzz_a85x fuzz/corpus -max_total_time=3600
 ```
 
 ## Install
@@ -46,11 +68,17 @@ ctest --test-dir build --output-on-failure
 sudo make install
 ```
 
-Use `PREFIX` or `DESTDIR` when packaging:
+Customize the prefix or package into a staging root:
 
 ```sh
 make install PREFIX=/usr
-make install DESTDIR="$PWD/pkg"
+make install DESTDIR=/tmp/package-root PREFIX=/usr
+```
+
+Remove installed files with:
+
+```sh
+sudo make uninstall
 ```
 
 ## Classic Ascii85
@@ -58,16 +86,23 @@ make install DESTDIR="$PWD/pkg"
 ```sh
 printf 'hello world' | ./ascii85
 printf '<~BOu!rD]j7BEbo7~>' | ./ascii85 -d
+```
+
+Delimiter-free:
+
+```sh
 printf 'hello world' | ./ascii85 -n -w 0
 ```
 
 ## A85X1
 
+Encode:
+
 ```sh
 printf 'hello world' | ./ascii85 --a85x
 ```
 
-Produces:
+Output:
 
 ```text
 A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185
@@ -79,36 +114,29 @@ Decode:
 printf 'A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185' | ./ascii85 --a85x --decode
 ```
 
-See [`SPEC-A85X.md`](SPEC-A85X.md).
+A85X1 is intentionally strict. Whitespace, NUL bytes, or any other trailing content after the checksum are rejected. A checksum failure produces no decoded output.
 
-## Fuzzing
+See [`SPEC-A85X.md`](SPEC-A85X.md) for the wire-format definition.
 
-Quick deterministic mutation smoke test:
+## Continuous integration and releases
 
-```sh
-make fuzz-smoke
-```
+- `ci.yml` builds/tests with GCC and Clang on Linux, Clang on macOS, and MSVC on Windows.
+- Sanitizer and short libFuzzer jobs run on Linux.
+- `codeql.yml` performs C/C++ static analysis on pushes, pull requests, and a weekly schedule.
+- Dependabot watches GitHub Actions dependencies.
+- Pushing a tag matching `v*` triggers `release.yml`, which builds platform binaries and creates a GitHub Release with SHA-256 checksums.
 
-AFL++:
+## Compatibility notes
 
-```sh
-make fuzz-afl
-afl-fuzz -i fuzz/corpus -o fuzz/findings -- ./ascii85-afl -x -d
-```
+A85X1 is a separate opt-in format. It is not wire-compatible with Adobe Ascii85 and does not claim to be an external standard.
 
-See [`fuzz/README.md`](fuzz/README.md).
+The default Ascii85 decoder is intentionally stricter about malformed encodings than the original upstream program. `--ignore-garbage` skips invalid non-whitespace characters, but it does not make structurally invalid tuples legal.
 
-## CI and releases
+## Security
 
-`.github/workflows/ci.yml` builds and tests on Linux, macOS, and Windows and runs sanitizer coverage on Linux.
+CRC-32 is for accidental corruption detection only. It does not provide authentication, secrecy, or protection from a malicious party who can modify both the payload and checksum.
 
-`.github/workflows/release.yml` packages platform binaries when a `v*` tag is pushed and creates a GitHub release.
-
-## Security model
-
-A85X is an encoding, not encryption. CRC-32 detects accidental corruption only. It is not a MAC or digital signature.
-
-Security issues should be reported using GitHub's private vulnerability reporting / security advisory feature when available. See [`SECURITY.md`](SECURITY.md).
+See [`SECURITY.md`](SECURITY.md) for reporting security issues.
 
 ## Provenance and license
 

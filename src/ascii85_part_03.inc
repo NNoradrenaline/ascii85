@@ -1,150 +1,120 @@
-}
+        die("read error");
 
-static int hex_upper_digit(int c) {
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'A' && c <= 'F')
-        return c - 'A' + 10;
-    return -1;
-}
-
-static uint32_t read_crc32_field(FILE *fp) {
-    uint32_t value = 0;
-    int i;
-
-    for (i = 0; i < 8; ++i) {
-        int c = getc(fp);
-        int d;
-        if (c == EOF)
-            die("A85X checksum is truncated");
-        d = hex_upper_digit(c);
-        if (d < 0)
-            die("A85X checksum must be eight uppercase hexadecimal digits");
-        value = (value << 4) | (uint32_t)d;
-    }
-    return value;
-}
-
-static void copy_stream(FILE *src, FILE *dst) {
-    unsigned char buf[8192];
-    size_t n;
-
-    while ((n = fread(buf, 1, sizeof buf, src)) > 0) {
-        if (fwrite(buf, 1, n, dst) != n)
+    if (count > 0) {
+        char out[5];
+        uint32_t value = ((uint32_t)block[0] << 24) |
+                         ((uint32_t)block[1] << 16) |
+                         ((uint32_t)block[2] << 8) |
+                         (uint32_t)block[3];
+        a85x_encode_u32(value, out);
+        if (fwrite(out, 1, 5, stdout) != 5)
             die("write error on standard output");
     }
-    if (ferror(src))
-        die("temporary stream read error");
+
+    if (printf(":%zu:%08" PRIX32,
+               count == 0 ? (size_t)0 : (size_t)4 - count,
+               crc32_finish(crc)) < 0)
+        die("write error on standard output");
 }
 
-static void expect_literal(FILE *fp, const char *literal) {
-    size_t i;
-    for (i = 0; literal[i] != '\0'; ++i) {
-        int c = getc(fp);
-        if (c == EOF || c != (unsigned char)literal[i])
-            die("invalid or unsupported A85X version marker");
-    }
-}
+typedef enum {
+    A85X_STATE_VERSION,
+    A85X_STATE_PAYLOAD,
+    A85X_STATE_PAD,
+    A85X_STATE_PAD_COLON,
+    A85X_STATE_CRC,
+    A85X_STATE_DONE,
+    A85X_STATE_ERROR
+} a85x_state;
 
-static void a85x_decode(FILE *fp) {
-    unsigned char group[5];
-    size_t group_len = 0;
-    unsigned char pending[4] = {0, 0, 0, 0};
-    int have_pending = 0;
-    int c;
-    int pad;
-    uint32_t crc = crc32_start();
+typedef struct {
+    a85x_state state;
+    size_t version_pos;
+    uint64_t group_value;
+    unsigned group_count;
+    uint64_t group_total;
+    unsigned char pending[4];
+    int have_pending;
+    unsigned pad;
+    unsigned crc_digits;
     uint32_t expected_crc;
-    FILE *tmp = tmpfile();
+    uint32_t crc;
+    FILE *sink;
+    const char *error;
+} a85x_decoder;
 
-    if (tmp == NULL)
-        die("could not create temporary verification stream");
+static const char A85X_PREFIX[] = A85X_VERSION ":";
 
-    expect_literal(fp, A85X_VERSION ":");
+static int a85x_decoder_fail(a85x_decoder *dec, const char *error) {
+    dec->state = A85X_STATE_ERROR;
+    dec->error = error;
+    return 0;
+}
 
-    for (;;) {
-        c = getc(fp);
-        if (c == EOF) {
-            fclose(tmp);
-            die("truncated A85X payload");
-        }
-        if (c == ':')
-            break;
+static int a85x_decoder_write(a85x_decoder *dec,
+                              const unsigned char *bytes, size_t count) {
+    size_t i;
+    for (i = 0; i < count; ++i)
+        dec->crc = crc32_update(dec->crc, bytes[i]);
+    if (dec->sink != NULL && count > 0 &&
+        fwrite(bytes, 1, count, dec->sink) != count)
+        return a85x_decoder_fail(dec, "temporary verification stream write error");
+    return 1;
+}
 
-        if (a85x_digit(c) < 0) {
-            fclose(tmp);
-            die_char("invalid A85X payload character", c);
-        }
+static int a85x_decoder_flush_pending(a85x_decoder *dec, size_t count) {
+    if (!dec->have_pending)
+        return count == 0 ? 1 : a85x_decoder_fail(dec, "internal A85X decoder error");
+    if (!a85x_decoder_write(dec, dec->pending, count))
+        return 0;
+    dec->have_pending = 0;
+    return 1;
+}
 
-        group[group_len++] = (unsigned char)c;
-        if (group_len == 5) {
-            unsigned char decoded[4];
-            a85x_group_to_bytes(group, decoded);
-            if (have_pending)
-                crc_write(tmp, pending, sizeof pending, &crc);
-            memcpy(pending, decoded, sizeof pending);
-            have_pending = 1;
-            group_len = 0;
-        }
-    }
+static void a85x_decoder_init(a85x_decoder *dec, FILE *sink) {
+    memset(dec, 0, sizeof *dec);
+    dec->state = A85X_STATE_VERSION;
+    dec->crc = crc32_start();
+    dec->sink = sink;
+}
 
-    if (group_len != 0) {
-        fclose(tmp);
-        die("A85X payload length is not a multiple of 5");
-    }
+static int a85x_decoder_feed(a85x_decoder *dec, unsigned char c) {
+    if (dec->state == A85X_STATE_ERROR)
+        return 0;
+    if (dec->state == A85X_STATE_DONE)
+        return a85x_decoder_fail(dec, "trailing data after A85X checksum");
 
-    c = getc(fp);
-    if (c < '0' || c > '3') {
-        fclose(tmp);
-        die("A85X pad must be exactly 0, 1, 2, or 3");
-    }
-    pad = c - '0';
+    switch (dec->state) {
+        case A85X_STATE_VERSION:
+            if (c != (unsigned char)A85X_PREFIX[dec->version_pos])
+                return a85x_decoder_fail(dec, "invalid or unsupported A85X version");
+            ++dec->version_pos;
+            if (dec->version_pos == sizeof A85X_PREFIX - 1)
+                dec->state = A85X_STATE_PAYLOAD;
+            return 1;
 
-    c = getc(fp);
-    if (c != ':') {
-        fclose(tmp);
-        die("A85X pad must be followed by ':'");
-    }
-
-    expected_crc = read_crc32_field(fp);
-
-    c = getc(fp);
-    if (c != EOF) {
-        fclose(tmp);
-        die("trailing bytes after A85X checksum");
-    }
-    if (ferror(fp)) {
-        fclose(tmp);
-        die("read error");
-    }
-
-    if (!have_pending) {
-        if (pad != 0) {
-            fclose(tmp);
-            die("empty A85X payload cannot have padding");
-        }
-    } else {
-        size_t data_len = (size_t)(4 - pad);
-        int i;
-        if (pad > 0) {
-            for (i = 4 - pad; i < 4; ++i) {
-                if (pending[i] != 0) {
-                    fclose(tmp);
-                    die("A85X declared padding bytes are non-zero");
-                }
-            }
-        }
-        crc_write(tmp, pending, data_len, &crc);
-    }
-
-    crc = crc32_finish(crc);
-    if (crc != expected_crc) {
-        fclose(tmp);
-        fprintf(stderr,
-                PROGRAM_NAME ": CRC-32 mismatch: encoded=%08" PRIX32
-                ", computed=%08" PRIX32 "\n",
-                expected_crc, crc);
-        exit(EXIT_FAILURE);
-    }
-
-    if (fflush(tmp) == EOF || fseek(tmp, 0, SEEK_SET) != 0) {
+        case A85X_STATE_PAYLOAD:
+            if (c == ':') {
+                if (dec->group_count != 0)
+                    return a85x_decoder_fail(dec, "A85X payload length is not a multiple of 5");
+                dec->state = A85X_STATE_PAD;
+                return 1;
+            } else {
+                int d = a85x_digit(c);
+                if (d < 0)
+                    return a85x_decoder_fail(dec, "invalid A85X payload character");
+                dec->group_value = dec->group_value * 85U + (uint64_t)(unsigned)d;
+                ++dec->group_count;
+                if (dec->group_count == 5) {
+                    uint32_t value;
+                    if (dec->group_value > UINT32_MAX)
+                        return a85x_decoder_fail(dec, "A85X payload group exceeds 32-bit range");
+                    if (dec->have_pending && !a85x_decoder_flush_pending(dec, 4))
+                        return 0;
+                    value = (uint32_t)dec->group_value;
+                    dec->pending[0] = (unsigned char)(value >> 24);
+                    dec->pending[1] = (unsigned char)(value >> 16);
+                    dec->pending[2] = (unsigned char)(value >> 8);
+                    dec->pending[3] = (unsigned char)value;
+                    dec->have_pending = 1;
+                    ++dec->group_total;

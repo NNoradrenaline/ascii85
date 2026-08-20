@@ -1,35 +1,3 @@
-
-static void set_binary_stdio(void) {
-#ifdef _WIN32
-    if (_setmode(_fileno(stdin), _O_BINARY) == -1)
-        die("could not set stdin to binary mode");
-    if (_setmode(_fileno(stdout), _O_BINARY) == -1)
-        die("could not set stdout to binary mode");
-#endif
-}
-
-static int getc_nospace(FILE *f) {
-    int c;
-    do {
-        c = getc(f);
-    } while (c != EOF && isspace((unsigned char)c));
-    return c;
-}
-
-static void putc_checked(int c) {
-    if (putchar(c) == EOF)
-        die("write error on standard output");
-}
-
-static void write_checked(FILE *fp, const unsigned char *buf, size_t len,
-                          const char *msg) {
-    if (len > 0 && fwrite(buf, 1, len, fp) != len)
-        die(msg);
-}
-
-static void putc_wrap(int c, int wrap, int *len) {
-    if (wrap > 0 && *len >= wrap) {
-        putc_checked('\n');
         *len = 0;
     }
     putc_checked(c);
@@ -51,12 +19,12 @@ static void ascii85_encode_tuple(uint32_t tuple, int count, int wrap,
     }
 
     for (i = 4; i >= 0; --i) {
-        out[i] = (char)(tuple % 85U + (uint32_t)'!');
+        out[i] = (char)(tuple % 85U + '!');
         tuple /= 85U;
     }
 
     for (i = 0; i < count + 1; ++i)
-        putc_wrap((unsigned char)out[i], wrap, plen);
+        putc_wrap(out[i], wrap, plen);
 }
 
 static void ascii85_write_tuple(uint32_t tuple, int bytes) {
@@ -148,3 +116,5 @@ static void ascii85_decode(FILE *fp, int delims, int ignore_garbage) {
 
         if (c < '!' || c > 'u') {
             if (ignore_garbage)
+                continue;
+            die_char("invalid Ascii85 character", c);

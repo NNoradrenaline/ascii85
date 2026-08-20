@@ -5,3 +5,4 @@
 #include "src/ascii85_part_03.inc"
 #include "src/ascii85_part_04.inc"
 #include "src/ascii85_part_05.inc"
+#include "src/ascii85_part_06.inc"

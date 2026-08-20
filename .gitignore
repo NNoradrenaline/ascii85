@@ -1,8 +1,12 @@
 ascii85
 ascii85.exe
 ascii85-san
-ascii85-afl
+fuzz_a85x
+fuzz_a85x.exe
+*.o
+*.obj
+*.profraw
+.DS_Store
+__pycache__/
 build/
 fuzz/findings/
-__pycache__/
-*.pyc

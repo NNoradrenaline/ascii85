@@ -1,44 +1,42 @@
-# Test results
+# Verification results for 2.2.0-a85x
 
-Validated locally on 2026-08-20 after the 2.1.0-a85x hardening update.
+Local verification was performed on 2026-08-20 before publication.
 
-## GCC / default compiler
+## Functional regression suite
 
-`make test`
+`make test` passed all 10 groups:
 
-- 9 test groups passed
-- includes classic Ascii85 compatibility vectors
-- A85X known vectors
-- malformed/canonical envelope rejection
-- embedded NUL and trailing-byte rejection
-- CRC corruption rejection with no unverified stdout
-- 1 MiB+ streaming round trip
-- randomized round trips
+- classic Ascii85 compatibility vectors against Python's `base64.a85encode`,
+- `z` / optional `y` abbreviation behavior,
+- strict malformed classic Ascii85 rejection,
+- A85X1 known vectors,
+- checksum-corruption atomicity (no unverified stdout),
+- canonical A85X1 rejection rules including embedded NUL/trailing bytes,
+- 250 randomized payload mutation rejection cases,
+- deterministic randomized round trips,
+- a 1 MiB A85X streaming round trip,
+- portable CLI parsing and file-input behavior.
+
+## Compilers
+
+The full 10-group suite passed with both GCC-compatible `cc` and Clang using C11 warnings enabled.
 
 ## Sanitizers
 
-`make sanitize`
+`make sanitize` passed all 10 groups under AddressSanitizer + UndefinedBehaviorSanitizer with leak detection enabled.
 
-- 9 test groups passed under AddressSanitizer + UndefinedBehaviorSanitizer
-- no sanitizer findings
+## Fuzzing
 
-## Fuzz smoke
+The libFuzzer smoke target completed roughly 4.9 million executions in a 10-second run under AddressSanitizer + UndefinedBehaviorSanitizer with no crash or sanitizer finding.
 
-`make fuzz-smoke`
+The repository also retains the process-level fuzz smoke harness and AFL++ build target for complementary parser testing.
 
-- 1,500 deterministic mutation cases
-- no signal crashes
+## Build and packaging
 
-## CMake / CTest
+- CMake configure/build/CTest completed successfully.
+- `make install DESTDIR=... PREFIX=/usr` staged both `usr/bin/ascii85` and `usr/share/man/man1/ascii85.1` successfully.
+- The staged binary reported `ascii85 2.2.0-a85x`.
 
-Release CMake build completed successfully and `ctest` passed 1/1 tests.
+## CI coverage after publication
 
-## Clang warnings
-
-Built with:
-
-```sh
-clang -std=c11 -Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -O2
-```
-
-The build completed with zero warnings, and all 9 test groups passed.
+GitHub Actions is configured to test CMake builds on Linux, macOS, and Windows, explicit GCC/Clang builds, sanitizers, libFuzzer smoke runs, and CodeQL analysis. Tagged releases build platform archives and SHA-256 checksums.
