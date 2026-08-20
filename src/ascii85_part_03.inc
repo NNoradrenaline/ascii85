@@ -1,20 +1,20 @@
         die("read error");
 
     if (count > 0) {
-        char out[5];
+        char encoded[5];
         uint32_t value = ((uint32_t)block[0] << 24) |
                          ((uint32_t)block[1] << 16) |
                          ((uint32_t)block[2] << 8) |
                          (uint32_t)block[3];
-        a85x_encode_u32(value, out);
-        if (fwrite(out, 1, 5, stdout) != 5)
-            die("write error on standard output");
+        a85x_encode_u32(value, encoded);
+        if (fwrite(encoded, 1, 5, out) != 5)
+            die("output write error");
     }
 
-    if (printf(":%zu:%08" PRIX32,
-               count == 0 ? (size_t)0 : (size_t)4 - count,
-               crc32_finish(crc)) < 0)
-        die("write error on standard output");
+    if (fprintf(out, ":%zu:%08" PRIX32,
+                count == 0 ? (size_t)0 : (size_t)4 - count,
+                crc32_finish(crc)) < 0)
+        die("output write error");
 }
 
 typedef enum {
