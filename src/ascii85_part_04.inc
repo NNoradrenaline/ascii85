@@ -79,13 +79,13 @@ static void copy_stream(FILE *src, FILE *dst) {
     size_t n;
     while ((n = fread(buf, 1, sizeof buf, src)) > 0) {
         if (fwrite(buf, 1, n, dst) != n)
-            die("write error on standard output");
+            die("output write error");
     }
     if (ferror(src))
-        die("temporary stream read error");
+        die("stream read error");
 }
 
-static void a85x_decode(FILE *fp) {
+static void a85x_decode(FILE *fp, FILE *out) {
     a85x_decoder dec;
     FILE *tmp = tmpfile();
     int c;
@@ -115,6 +115,6 @@ static void a85x_decode(FILE *fp) {
         fclose(tmp);
         die("temporary verification stream seek error");
     }
-    copy_stream(tmp, stdout);
+    copy_stream(tmp, out);
     if (fclose(tmp) != 0)
         die("temporary verification stream close error");
