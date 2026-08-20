@@ -30,6 +30,11 @@ def run(args, data=b"", ok=True):
     return p
 
 
+def read_bytes(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
 def a85x_ref(data: bytes) -> bytes:
     pad = (-len(data)) % 4
     padded = data + b"\x00" * pad
@@ -169,8 +174,11 @@ def test_large_streaming_round_trip():
 
 
 def test_cli_portability_parser():
-    assert run(["--version"]).stdout.startswith(b"ascii85 2.2.0")
-    assert b"A85X1" in run(["--help"]).stdout
+    assert run(["--version"]).stdout.startswith(b"ascii85 2.3.0")
+    help_text = run(["--help"]).stdout
+    assert b"A85X1" in help_text
+    assert b"--text" in help_text
+    assert b"--output" in help_text
     assert run(["-nw0"], b"hello").stdout == run(["-n", "-w", "0"], b"hello").stdout
     assert run(["--no-delims", "--wrap=0"], b"hello").stdout == run(["-n", "-w0"], b"hello").stdout
     run(["--does-not-exist"], ok=False)
@@ -187,6 +195,58 @@ def test_cli_portability_parser():
         assert run(["-dx"], token).stdout == data
 
 
+def test_direct_text_input():
+    assert run(["-x", "--text", "hello"]).stdout == a85x_ref(b"hello")
+    assert run(["-x", "--text="]).stdout == a85x_ref(b"")
+    expected = base64.a85encode(b"hello", adobe=False, foldspaces=False, wrapcol=0, pad=False)
+    assert run(["-n", "-w0", "-t", "hello"]).stdout == expected
+    run(["-d", "--text", "hello"], ok=False)
+    run(["-x", "--text", "hello", "input.txt"], ok=False)
+
+
+def test_output_files_are_staged():
+    with tempfile.TemporaryDirectory() as td:
+        out_path = os.path.join(td, "message.a85x")
+        p = run(["-x", "--text", "hello", "-o", out_path])
+        assert p.stdout == b""
+        assert read_bytes(out_path) == a85x_ref(b"hello")
+
+        restored = os.path.join(td, "restored.bin")
+        p = run(["-dx", "-o", restored], read_bytes(out_path))
+        assert p.stdout == b""
+        assert read_bytes(restored) == b"hello"
+
+        with open(restored, "wb") as f:
+            f.write(b"KEEP-EXISTING-DATA")
+        broken = bytearray(a85x_ref(b"hello"))
+        payload_start = len(b"A85X1:")
+        broken[payload_start] = ord("1") if broken[payload_start] != ord("1") else ord("2")
+        run(["-dx", "-o", restored], bytes(broken), ok=False)
+        assert read_bytes(restored) == b"KEEP-EXISTING-DATA"
+
+        same_path = os.path.join(td, "same-file.bin")
+        data = bytes(range(256))
+        with open(same_path, "wb") as f:
+            f.write(data)
+        run(["-x", same_path, "-o", same_path])
+        assert read_bytes(same_path) == a85x_ref(data)
+        run(["-dx", same_path, "-o", same_path])
+        assert read_bytes(same_path) == data
+
+
+def test_binary_stdio_regression():
+    data = bytes(range(256))
+    classic = run(["-n", "-w0"], data).stdout
+    assert classic == base64.a85encode(
+        data, adobe=False, foldspaces=False, wrapcol=0, pad=False
+    )
+    assert run(["-dn"], classic).stdout == data
+
+    token = run(["-x"], data).stdout
+    assert token == a85x_ref(data)
+    assert run(["-dx"], token).stdout == data
+
+
 def main():
     tests = [
         test_ascii85_vectors,
@@ -199,6 +259,9 @@ def main():
         test_fuzz_round_trips,
         test_large_streaming_round_trip,
         test_cli_portability_parser,
+        test_direct_text_input,
+        test_output_files_are_staged,
+        test_binary_stdio_regression,
     ]
     for test in tests:
         test()
