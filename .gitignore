@@ -1,4 +1,8 @@
 ascii85
 ascii85.exe
 ascii85-san
+ascii85-afl
+build/
+fuzz/findings/
 __pycache__/
+*.pyc

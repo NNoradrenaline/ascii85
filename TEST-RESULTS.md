@@ -1,36 +1,44 @@
-# Verification results
+# Test results
 
-Upstream: https://github.com/roukaour/ascii85
-Upstream HEAD inspected: 069f585cbe7642a3f0f08de71ced639ce48375ba
+Validated locally on 2026-08-20 after the 2.1.0-a85x hardening update.
 
-## Normal build and tests
-```text
-cc -std=c11 -Wall -Wextra -Wconversion -Wshadow -pedantic -O2  -o ascii85 ascii85.c
-python3 tests.py ./ascii85
-ok - test_ascii85_vectors
-ok - test_ascii85_abbreviations
-ok - test_strict_rejections
-ok - test_a85x_vectors
-ok - test_a85x_corruption
-ok - test_a85x_canonical_rules
-ok - test_fuzz
+## GCC / default compiler
 
-7 test groups passed
+`make test`
+
+- 9 test groups passed
+- includes classic Ascii85 compatibility vectors
+- A85X known vectors
+- malformed/canonical envelope rejection
+- embedded NUL and trailing-byte rejection
+- CRC corruption rejection with no unverified stdout
+- 1 MiB+ streaming round trip
+- randomized round trips
+
+## Sanitizers
+
+`make sanitize`
+
+- 9 test groups passed under AddressSanitizer + UndefinedBehaviorSanitizer
+- no sanitizer findings
+
+## Fuzz smoke
+
+`make fuzz-smoke`
+
+- 1,500 deterministic mutation cases
+- no signal crashes
+
+## CMake / CTest
+
+Release CMake build completed successfully and `ctest` passed 1/1 tests.
+
+## Clang warnings
+
+Built with:
+
+```sh
+clang -std=c11 -Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -O2
 ```
 
-## ASan + UBSan
-```text
-cc -std=c11 -Wall -Wextra -pedantic -O1 -g \
-	-fsanitize=address,undefined -fno-omit-frame-pointer \
-	-o ascii85-san ascii85.c
-python3 tests.py ./ascii85-san
-ok - test_ascii85_vectors
-ok - test_ascii85_abbreviations
-ok - test_strict_rejections
-ok - test_a85x_vectors
-ok - test_a85x_corruption
-ok - test_a85x_canonical_rules
-ok - test_fuzz
-
-7 test groups passed
-```
+The build completed with zero warnings, and all 9 test groups passed.

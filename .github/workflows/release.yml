@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            exe: ascii85
+          - os: macos-latest
+            name: macos
+            exe: ascii85
+          - os: windows-latest
+            name: windows-x86_64
+            exe: ascii85.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Stage Unix binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/${{ matrix.exe }} dist/
+          cp README.md LICENSE SPEC-A85X.md CHANGELOG.md dist/
+          cmake -E tar czf ascii85-${{ matrix.name }}.tar.gz dist
+      - name: Stage Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build/Release/${{ matrix.exe }} dist/
+          Copy-Item README.md,LICENSE,SPEC-A85X.md,CHANGELOG.md dist/
+          Compress-Archive -Path dist/* -DestinationPath ascii85-${{ matrix.name }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ascii85-${{ matrix.name }}
+          path: |
+            ascii85-*.tar.gz
+            ascii85-*.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --generate-notes --title "$GITHUB_REF_NAME"
