@@ -1,64 +1,83 @@
-# `ascii85`
+# `ascii85` A85X fork
 
-`ascii85` is a command-line program for encoding and decoding files using the
-[Ascii85](https://en.wikipedia.org/wiki/Ascii85) algorithm. Ascii85 encodes
-groups of four bytes using five printable ASCII characters from a set of 85.
-[Base64](https://en.wikipedia.org/wiki/Base64) is a similar algorithm which
-encodes three bytes with four characters from a 64-character set, resulting in
-more overhead. I based `ascii85`'s command syntax on that of Simon Joseffson's
-`base64` program from the [GNU coreutils](http://www.gnu.org/software/coreutils/).
+This is a source fork of [roukaour/ascii85](https://github.com/roukaour/ascii85), based on upstream commit `069f585cbe7642a3f0f08de71ced639ce48375ba`.
 
-`ascii85` is designed to be flexible in what it can decode. The `-i` flag will
-cause it to skip invalid characters in an encoded file rather than printing an
-error message and halting. The `<~` and `~>` delimiters are also optional; with
-the `-n` flag, all input will be interpreted as Ascii85-encoded data without
-looking for delimiters.
+The original program is a compact C command-line Ascii85 encoder/decoder. This fork keeps classic Ascii85 as the default so existing command lines remain useful, while tightening malformed-input handling and adding an optional canonical **A85X1** mode.
 
-When a delimited file is being decoded, `ascii85` ignores any characters outside
-the delimiters. This means that extra data can be prepended or appended to the
-file. For instance, one might want to add checksums or hashes to the end, like
-the original [`btoa`](http://en.wikipedia.org/wiki/Ascii85#btoa_version) program.
+## What changed
 
-## Built-in help
+- Keeps standard Ascii85 encode/decode behavior and `<~ ~>` delimiters.
+- Keeps `z`, optional `y`, wrapping, delimiter-free mode, and garbage-skipping mode.
+- Fixes the upstream extra-operand check.
+- Rejects impossible 5-digit Ascii85 values above `UINT32_MAX` instead of allowing 32-bit arithmetic wraparound.
+- Rejects one-character final tuples and `z`/`y` inside partial tuples.
+- Uses safer character classification and stricter option parsing.
+- Detects read/write failures.
+- Adds `--version`.
+- Adds `-x` / `--a85x` for A85X1.
+- A85X1 adds explicit final padding, a fixed safer alphabet, canonical framing, and CRC-32 accidental-corruption detection.
+- A85X decoding verifies the entire checksum before releasing decoded bytes to stdout.
+- Adds automated compatibility, malformed-input, known-vector, corruption, and randomized round-trip tests.
 
+## Build
+
+```sh
+make
 ```
-NAME
-        ascii85 - Ascii85 encode/decode data and print to standard output
 
-SYNOPSIS
-        ascii85 [OPTION]... [FILE]
+## Test
 
-DESCRIPTION
-        Ascii85 encode or decode FILE, or standard input, to standard output.
-
-        -d, --decode
-                decode data (encodes by default)
-
-        -i, --ignore-garbage
-                when decoding, ignore invalid characters
-
-        -n, --no-delims
-                when encoding, omit delimiters (<~ and ~>), and when decoding,
-                do not look for delimiters
-
-        -w, --wrap=COLS
-                wrap encoded lines after COLS characters (default 76).  Use 0
-                to disable line wrapping.
-
-        -y, --y-abbr
-                abbreviates four encoded spaces as 'y'
-
-        -h, --help
-                display this help and exit
-
-        With no FILE, or when FILE is -, read standard input.
-
-AUTHOR
-        Written by Remy Oukaour <remy.oukaour@gmail.com>.
-
-COPYRIGHT
-        Copyright (C) 2012-2016 Remy Oukaour <http://www.remyoukaour.com>.
-        MIT License.
-        This is free software: you are free to change and redistribute it.
-        There is NO WARRANTY, to the extent permitted by law.
+```sh
+make test
 ```
+
+For AddressSanitizer + UndefinedBehaviorSanitizer:
+
+```sh
+make sanitize
+```
+
+## Classic Ascii85
+
+```sh
+printf 'hello world' | ./ascii85
+printf '<~BOu!rD]j7BEbo7~>' | ./ascii85 -d
+```
+
+Delimiter-free:
+
+```sh
+printf 'hello world' | ./ascii85 -n -w 0
+```
+
+## A85X1
+
+```sh
+printf 'hello world' | ./ascii85 --a85x
+```
+
+Output:
+
+```text
+A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185
+```
+
+Decode:
+
+```sh
+printf 'A85X1:Xk~0_Zy.MXa%[M(:1:0D4A1185' | ./ascii85 --a85x --decode
+```
+
+See [`SPEC-A85X.md`](SPEC-A85X.md) for the format definition.
+
+## Compatibility notes
+
+A85X1 is a separate opt-in format. It is not wire-compatible with Adobe Ascii85 and does not claim to be a standard.
+
+The default Ascii85 decoder is intentionally stricter about malformed encodings than the original upstream program. `--ignore-garbage` still skips invalid non-whitespace characters, but it does not make structurally invalid tuples legal.
+
+## Provenance and license
+
+Original `ascii85` by Remy Oukaour, Copyright (C) 2012-2016, MIT licensed.
+
+This fork retains the upstream MIT license and copyright notice. See [`LICENSE`](LICENSE).
