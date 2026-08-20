@@ -21,6 +21,8 @@ typedef struct {
     int help;
     int version;
     const char *filename;
+    const char *output_filename;
+    const char *text;
 } cli_options;
 
 static void cli_init(cli_options *opts) {
@@ -50,6 +52,20 @@ static void set_filename(cli_options *opts, const char *arg) {
     opts->filename = arg;
 }
 
+static void set_output_filename(cli_options *opts, const char *arg) {
+    if (opts->output_filename != NULL)
+        die("output file specified more than once");
+    if (arg[0] == '\0')
+        die("--output requires a non-empty file name");
+    opts->output_filename = arg;
+}
+
+static void set_text(cli_options *opts, const char *arg) {
+    if (opts->text != NULL)
+        die("--text specified more than once");
+    opts->text = arg;
+}
+
 static void parse_long_option(int argc, char **argv, int *index, cli_options *opts) {
     const char *arg = argv[*index];
     const char *value = NULL;
@@ -77,6 +93,22 @@ static void parse_long_option(int argc, char **argv, int *index, cli_options *op
         }
         opts->wrap = parse_wrap(value);
         opts->wrap_set = 1;
+    } else if (long_option_value(arg, "--output", &value)) {
+        if (value == NULL) {
+            ++(*index);
+            if (*index >= argc)
+                die("--output requires an argument");
+            value = argv[*index];
+        }
+        set_output_filename(opts, value);
+    } else if (long_option_value(arg, "--text", &value)) {
+        if (value == NULL) {
+            ++(*index);
+            if (*index >= argc)
+                die("--text requires an argument");
+            value = argv[*index];
+        }
+        set_text(opts, value);
     } else {
         fprintf(stderr, PROGRAM_NAME ": unrecognized option '%s'\n", arg);
         fputs(USAGE_TEXT, stderr);
@@ -96,19 +128,33 @@ static void parse_short_options(int argc, char **argv, int *index, cli_options *
             case 'n': opts->delims = 0; break;
             case 'y': opts->y_abbr = 1; break;
             case 'h': opts->help = 1; break;
-            case 'w': {
+            case 'w':
+            case 'o':
+            case 't': {
+                char option = arg[pos];
                 const char *value;
                 if (arg[pos + 1] != '\0') {
                     value = arg + pos + 1;
                     pos = strlen(arg) - 1;
                 } else {
                     ++(*index);
-                    if (*index >= argc)
-                        die("-w requires an argument");
+                    if (*index >= argc) {
+                        if (option == 'w')
+                            die("-w requires an argument");
+                        if (option == 'o')
+                            die("-o requires an argument");
+                        die("-t requires an argument");
+                    }
                     value = argv[*index];
                 }
-                opts->wrap = parse_wrap(value);
-                opts->wrap_set = 1;
+                if (option == 'w') {
+                    opts->wrap = parse_wrap(value);
+                    opts->wrap_set = 1;
+                } else if (option == 'o') {
+                    set_output_filename(opts, value);
+                } else {
+                    set_text(opts, value);
+                }
                 return;
             }
             default:
