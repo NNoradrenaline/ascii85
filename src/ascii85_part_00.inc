@@ -1,5 +1,5 @@
 /*
- * ascii85 - Ascii85/A85X encode/decode data and print to standard output
+ * ascii85 - Ascii85/A85X encode/decode data
  *
  * Original work Copyright (C) 2012-2016 Remy Oukaour
  * <http://www.remyoukaour.com>.
@@ -39,7 +39,7 @@
 #endif
 
 #define PROGRAM_NAME "ascii85"
-#define PROGRAM_VERSION "2.2.0-a85x"
+#define PROGRAM_VERSION "2.3.0-a85x"
 #define A85X_VERSION "A85X1"
 
 static const char A85X_ALPHABET[] =
@@ -57,12 +57,17 @@ static const char *HELP_TEXT =
     "    " PROGRAM_NAME " [OPTION]... [FILE]\n\n"
     "DESCRIPTION\n"
     "    Encode FILE (or stdin) as Ascii85 by default. Decode with -d.\n"
-    "    Use -x/--a85x for the canonical A85X1 format.\n\n"
+    "    Use -x/--a85x for the canonical A85X1 format.\n"
+    "    Use -t/--text to encode a short command-line string directly.\n\n"
     "OPTIONS\n"
     "    -d, --decode\n"
     "        decode data instead of encoding\n\n"
     "    -x, --a85x\n"
     "        use A85X1 instead of classic Ascii85\n\n"
+    "    -t, --text=TEXT\n"
+    "        encode TEXT instead of reading FILE or stdin; encoding only\n\n"
+    "    -o, --output=FILE\n"
+    "        write output to FILE; use '-' for stdout\n\n"
     "    -i, --ignore-garbage\n"
     "        Ascii85 decode only: skip invalid non-whitespace characters\n\n"
     "    -n, --no-delims\n"
@@ -110,11 +115,11 @@ static int getc_nospace(FILE *f) {
     return c;
 }
 
-static void putc_checked(int c) {
-    if (putchar(c) == EOF)
-        die("write error on standard output");
+static void putc_checked(FILE *out, int c) {
+    if (putc(c, out) == EOF)
+        die("output write error");
 }
 
-static void putc_wrap(int c, int wrap, int *len) {
+static void putc_wrap(FILE *out, int c, int wrap, int *len) {
     if (wrap > 0 && *len >= wrap) {
-        putc_checked('\n');
+        putc_checked(out, '\n');
