@@ -19,6 +19,94 @@ The original project is a compact C command-line Ascii85 encoder/decoder. This f
 - GitHub Actions tests Linux, macOS, and Windows and runs CodeQL security analysis.
 - Tagged releases can automatically build Linux, macOS, and Windows binaries.
 
+## Download and quick start
+
+The easiest way to use `ascii85` is to download a prebuilt binary from the [GitHub Releases page](https://github.com/NNoradrenaline/ascii85/releases/latest).
+
+Choose the archive for your operating system:
+
+- **Windows:** `ascii85-windows-x86_64.zip`
+- **Linux:** `ascii85-linux-x86_64.tar.gz`
+- **macOS:** `ascii85-macos.tar.gz`
+
+Extract the archive somewhere convenient. On Windows, open Command Prompt or PowerShell in the extracted folder and verify the program:
+
+```bat
+ascii85.exe --version
+```
+
+You should see a version such as:
+
+```text
+ascii85 2.2.0-a85x
+```
+
+### Encode a file with A85X
+
+A85X is the hardened, opt-in format added by this fork.
+
+Windows:
+
+```bat
+ascii85.exe -x input.txt > output.a85x
+```
+
+Linux/macOS:
+
+```sh
+./ascii85 -x input.txt > output.a85x
+```
+
+The encoded file uses the canonical A85X1 envelope:
+
+```text
+A85X1:<payload>:<pad>:<CRC32>
+```
+
+### Decode an A85X file
+
+Windows:
+
+```bat
+ascii85.exe -x -d output.a85x > restored.txt
+```
+
+Linux/macOS:
+
+```sh
+./ascii85 -x -d output.a85x > restored.txt
+```
+
+The decoder verifies the CRC-32 before releasing decoded data. If the encoded data is damaged or altered, decoding fails instead of silently writing corrupted output.
+
+### Binary files work too
+
+The tool is not limited to text. You can encode images, archives, executables, and other binary files.
+
+Windows example:
+
+```bat
+ascii85.exe -x photo.png > photo.a85x
+ascii85.exe -x -d photo.a85x > restored-photo.png
+```
+
+### Classic Ascii85 mode
+
+Leave off `-x` to use classic Ascii85:
+
+```bat
+ascii85.exe input.txt > output.ascii85
+ascii85.exe -d output.ascii85 > restored.txt
+```
+
+For all options:
+
+```bat
+ascii85.exe --help
+```
+
+If you prefer to compile it yourself, continue to the build instructions below.
+
 ## Build
 
 ### Unix-like systems
