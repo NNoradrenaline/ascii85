@@ -4,6 +4,7 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
 import zlib
 
 BIN = sys.argv[1] if len(sys.argv) > 1 else "./ascii85"
@@ -51,6 +52,21 @@ def test_ascii85_abbreviations():
     assert run(["-d", "-n"], b"y").stdout == b"    "
 
 
+def test_cli():
+    assert b"2.1.0-a85x" in run(["--version"]).stdout
+    assert b"A85X" in run(["--help"]).stdout
+    assert run(["-xn"], b"hello", ok=False).returncode != 0
+    assert run(["--wrap=0", "-n"], b"hello").stdout == base64.a85encode(b"hello")
+    assert run(["-nw0"], b"hello").stdout == base64.a85encode(b"hello")
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        f.write(b"hello")
+        path = f.name
+    try:
+        assert run(["-x", path]).stdout == a85x_ref(b"hello")
+    finally:
+        os.unlink(path)
+
+
 def test_strict_rejections():
     run(["-d", "-n"], b"!", ok=False)
     run(["-d", "-n"], b"uuuuu", ok=False)
@@ -87,6 +103,7 @@ def test_a85x_corruption():
 
 
 def test_a85x_canonical_rules():
+    good = a85x_ref(b"hello")
     bad = [
         b"A85X1::1:00000000",
         b"A85X1:0:0:00000000",
@@ -94,9 +111,22 @@ def test_a85x_canonical_rules():
         b"A85X1::0:0000000a",
         b"A85X2::0:00000000",
         b"A85X1::0:00000000:EXTRA",
+        good + b"\n",
+        good + b"\x00",
+        good + b"\x00TRAILING",
+        b"A85X1:\x00:0:00000000",
     ]
     for token in bad:
-        run(["-x", "-d"], token, ok=False)
+        p = run(["-x", "-d"], token, ok=False)
+        assert p.stdout == b""
+
+
+def test_large_streaming():
+    rng = random.Random(0x51EA)
+    data = bytes(rng.getrandbits(8) for _ in range(1024 * 1024 + 3))
+    enc = run(["-x"], data).stdout
+    assert enc == a85x_ref(data)
+    assert run(["-x", "-d"], enc).stdout == data
 
 
 def test_fuzz():
@@ -119,10 +149,12 @@ def main():
     tests = [
         test_ascii85_vectors,
         test_ascii85_abbreviations,
+        test_cli,
         test_strict_rejections,
         test_a85x_vectors,
         test_a85x_corruption,
         test_a85x_canonical_rules,
+        test_large_streaming,
         test_fuzz,
     ]
     for test in tests:

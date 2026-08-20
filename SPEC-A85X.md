@@ -13,6 +13,7 @@ A85X1:<payload>:<pad>:<CRC32>
 - `payload` consists only of the 85-character alphabet below and has a length divisible by 5.
 - `pad` is exactly one digit from `0` through `3`.
 - `CRC32` is exactly eight uppercase hexadecimal digits and is calculated over the original, unpadded bytes.
+- No bytes may follow the eighth checksum digit. In particular, trailing whitespace and embedded/trailing NUL bytes are invalid.
 
 ## Alphabet
 
@@ -20,7 +21,7 @@ A85X1:<payload>:<pad>:<CRC32>
 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+,-./=?@[]^_{}~
 ```
 
-The characters `"`, `'`, `\\`, `` ` ``, `<`, `>`, `:`, `;`, and `|` are excluded. `:` is reserved for framing.
+The characters `"`, `'`, `\`, `` ` ``, `<`, `>`, `:`, `;`, and `|` are excluded. `:` is reserved for framing.
 
 ## Block transform
 
@@ -58,6 +59,7 @@ The decoder rejects:
 - invalid padding counts,
 - non-zero bytes in declared padding,
 - lowercase or malformed CRC fields,
-- CRC mismatches.
+- CRC mismatches,
+- trailing bytes of any kind.
 
-The command-line decoder buffers verified output in a temporary stream and only writes it to stdout after the CRC passes.
+The reference CLI parses A85X input incrementally. It keeps only one decoded 4-byte block pending so final padding can be validated. Decoded bytes are written to a temporary verification stream and are copied to stdout only after CRC-32 validation succeeds. This avoids loading the encoded input into memory while preserving the no-unverified-output guarantee.

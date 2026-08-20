@@ -1,0 +1,60 @@
+.TH ASCII85 1 "August 2026" "ascii85 2.1.0-a85x" "User Commands"
+.SH NAME
+ascii85 \- encode or decode Ascii85 and A85X1 data
+.SH SYNOPSIS
+.B ascii85
+.RI [ OPTION ]...
+.RI [ FILE ]
+.SH DESCRIPTION
+.B ascii85
+encodes FILE, or standard input, as classic Ascii85 by default.
+Use
+.B \-d
+to decode.
+Use
+.B \-x
+or
+.B \-\-a85x
+for the canonical A85X1 envelope.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-decode
+Decode instead of encode.
+.TP
+.BR \-x ", " \-\-a85x
+Use A85X1 mode.
+.TP
+.BR \-i ", " \-\-ignore\-garbage
+Ascii85 decode only: skip invalid non-whitespace characters.
+.TP
+.BR \-n ", " \-\-no\-delims
+Ascii85 only: omit delimiters when encoding, or do not require them when decoding.
+.TP
+.BR \-w ", " \-\-wrap =COLS
+Ascii85 encode only: wrap encoded output after COLS characters. Use 0 to disable.
+.TP
+.BR \-y ", " \-\-y\-abbr
+Ascii85 only: abbreviate four spaces as y.
+.TP
+.B \-\-version
+Print version information.
+.TP
+.BR \-h ", " \-\-help
+Print help.
+.SH A85X1
+A85X1 uses the envelope:
+.PP
+.B A85X1:<payload>:<pad>:<CRC32>
+.PP
+The decoder is strict. It rejects trailing bytes, embedded invalid characters,
+non-canonical checksum formatting, invalid padding, out-of-range radix-85
+groups, and CRC mismatches. Decoded bytes are held in a temporary stream until
+the checksum succeeds, so unverified output is not released to stdout.
+.PP
+CRC-32 is for accidental corruption detection only and is not authentication.
+.SH EXIT STATUS
+Zero on success, non-zero on invalid input, I/O errors, or invalid options.
+.SH SEE ALSO
+.BR base64 (1)
+.SH LICENSE
+MIT.
